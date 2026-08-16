@@ -16,11 +16,9 @@ Esto es una decisión de diseño real -- va documentada en el
 Documento de Arquitectura, sección Reranking.
 """
 
-import json
 import os
 
 from google import genai
-from google.genai import types
 
 from rag.busqueda import buscar_chunks_relevantes
 

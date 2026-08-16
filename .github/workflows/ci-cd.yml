@@ -1,0 +1,64 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar ruff
+        run: pip install ruff
+      - name: Revisar estilo de código (lint)
+        run: ruff check . --exclude frontend --exclude node_modules
+
+  test:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar dependencias de test
+        run: pip install pytest
+      - name: Correr tests unitarios
+        run: python -m pytest tests/ -v
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      id-token: write  # necesario para Workload Identity Federation -- sin esto, GitHub no puede probarle a Google quién es
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Autenticar con Google Cloud (sin llaves, vía Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/575202457786/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'github-actions-deployer@my-first-project-123456-505714.iam.gserviceaccount.com'
+
+      - name: Configurar gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Desplegar API a Cloud Run
+        run: |
+          gcloud run deploy bike-sales-api \
+            --source . \
+            --region us-central1 \
+            --allow-unauthenticated \
+            --set-secrets=DB_PASSWORD=db-password:latest \
+            --set-env-vars=GCP_PROJECT_ID=my-first-project-123456-505714 \
+            --memory 1Gi \
+            --timeout 300 \
+            --quiet

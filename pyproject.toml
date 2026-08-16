@@ -1,0 +1,10 @@
+[tool.ruff]
+line-length = 120
+exclude = ["frontend", "node_modules", "__pycache__"]
+
+[tool.ruff.lint]
+# Empezamos con las reglas esenciales (errores reales, no solo estilo)
+# para que el lint sea útil sin ser tan estricto que bloquee el pipeline
+# por detalles menores en esta primera versión.
+select = ["E", "F"]
+ignore = ["E501"]  # línea muy larga -- ya cubierto por line-length, no lo duplicamos como error duro

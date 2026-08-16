@@ -17,6 +17,7 @@ from google.genai import types
 
 from tools.calculadora_metricas import TOOL_SCHEMA as SCHEMA_CALCULADORA, calcular_metrica
 from tools.consulta_ventas import TOOL_SCHEMA as SCHEMA_VENTAS, consultar_ventas
+from tools.generador_reportes import TOOL_SCHEMA as SCHEMA_REPORTE, generar_reporte_ventas
 from rag.reranking import buscar_con_reranking
 from judge.main import evaluar_respuesta
 from observability.logger import nuevo_request_id, calcular_costo, guardar_log, Cronometro
@@ -68,12 +69,14 @@ def _schema_a_function_declaration(schema: dict) -> types.FunctionDeclaration:
 TOOLS = types.Tool(function_declarations=[
     _schema_a_function_declaration(SCHEMA_CALCULADORA),
     _schema_a_function_declaration(SCHEMA_VENTAS),
+    _schema_a_function_declaration(SCHEMA_REPORTE),
     _schema_a_function_declaration(SCHEMA_BUSQUEDA_DOCS),
 ])
 
 EJECUTORES = {
     "calcular_metrica_negocio": lambda args: calcular_metrica(**args),
     "consultar_ventas": lambda args: consultar_ventas(**args),
+    "generar_reporte_ventas": lambda args: generar_reporte_ventas(**args),
     "buscar_en_documentos": _ejecutar_busqueda_docs,
 }
 

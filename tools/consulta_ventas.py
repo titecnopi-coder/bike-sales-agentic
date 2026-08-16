@@ -1,40 +1,40 @@
 """
-Tool: Consulta de Datos de Ventas
-===================================
-
-Qué hace
---------
-Responde preguntas sobre ventas: total de unidades e ingresos, filtrando
-opcionalmente por categoría de producto.
-
-Por qué existe
----------------
-El enunciado exige que al menos una Tool consulte "datos reales"
-(BigQuery, PostgreSQL o API REST). HOY la construimos leyendo un CSV
-local, para tener el patrón completo funcionando sin depender de que
-tu cuenta de GCP ya esté lista. Cuando la tengas, solo cambiamos la
-función `_cargar_datos()` para que en vez de leer el CSV, haga una
-consulta SQL a BigQuery. El resto (el schema, la función pública
-`consultar_ventas`) no cambia — por eso separamos "cómo se obtienen
-los datos" de "qué se hace con ellos".
+Tool: Consulta de Datos de Ventas -- versión Cloud SQL (PostgreSQL real)
+============================================================================
+Antes leía un CSV local. Ahora consulta la tabla 'ventas' en Cloud SQL
+con SQL real -- esto es lo que exige el enunciado: al menos una tool
+debe consultar datos reales (BigQuery, PostgreSQL, o API REST).
 """
 
-import csv
-from pathlib import Path
+import os
+from google.cloud.sql.connector import Connector
+import sqlalchemy
 
-RUTA_CSV = Path(__file__).parent / "datos_ventas_ejemplo.csv"
+PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "my-first-project-123456-505714")
+REGION = "us-central1"
+INSTANCIA = "bike-sales-db"
+BASE_DE_DATOS = "bike_sales"
+USUARIO = "postgres"
+CONTRASENA = os.environ.get("DB_PASSWORD")
+
+connector = Connector()
 
 
-# ---------------------------------------------------------------------------
-# 1. Schema JSON de la tool
-# ---------------------------------------------------------------------------
+def _conectar():
+    conexion_string = f"{PROJECT_ID}:{REGION}:{INSTANCIA}"
+    return connector.connect(
+        conexion_string, "pg8000",
+        user=USUARIO, password=CONTRASENA, db=BASE_DE_DATOS,
+    )
+
+
 TOOL_SCHEMA = {
     "name": "consultar_ventas",
     "description": (
-        "Consulta datos reales de ventas de bicicletas: unidades vendidas "
-        "e ingresos totales, con la opción de filtrar por categoría de "
-        "producto (Montaña, Urbana, Ruta). Úsala siempre que el usuario "
-        "pregunte por cifras de ventas, no inventes números."
+        "Consulta datos reales de ventas de bicicletas (desde PostgreSQL en "
+        "Cloud SQL): unidades vendidas e ingresos totales, con la opción de "
+        "filtrar por categoría de producto (Montaña, Urbana, Ruta). Úsala "
+        "siempre que el usuario pregunte por cifras de ventas."
     ),
     "input_schema": {
         "type": "object",
@@ -50,35 +50,34 @@ TOOL_SCHEMA = {
 }
 
 
-# ---------------------------------------------------------------------------
-# 2. Implementación real
-# ---------------------------------------------------------------------------
-def _cargar_datos() -> list[dict]:
-    """
-    HOY: lee el CSV local.
-    DESPUÉS (con GCP listo): esta función se reemplaza por una consulta
-    SQL real a BigQuery, por ejemplo:
-        SELECT fecha, producto, categoria, unidades_vendidas, ingresos
-        FROM `proyecto.dataset.ventas`
-    El resto del archivo no se toca.
-    """
-    with open(RUTA_CSV, encoding="utf-8") as f:
-        return list(csv.DictReader(f))
-
-
 def consultar_ventas(categoria: str) -> dict:
     """
-    Devuelve unidades totales e ingresos totales, filtrando por categoría
-    si se pide. Nunca lanza una excepción sin controlar (mismo criterio
-    que la tool anterior, por el KPI de éxito de tools).
+    Ejecuta una consulta SQL real contra la tabla 'ventas' en Cloud SQL.
+    Nunca lanza una excepción sin controlar (mismo criterio de siempre,
+    por el KPI de éxito de tools).
     """
     try:
-        filas = _cargar_datos()
+        engine = sqlalchemy.create_engine("postgresql+pg8000://", creator=_conectar)
+        with engine.connect() as conn:
+            if categoria == "todas":
+                query = sqlalchemy.text("""
+                    SELECT COALESCE(SUM(unidades_vendidas), 0) AS unidades,
+                           COALESCE(SUM(ingresos), 0) AS ingresos,
+                           COUNT(*) AS registros
+                    FROM ventas;
+                """)
+                fila = conn.execute(query).mappings().first()
+            else:
+                query = sqlalchemy.text("""
+                    SELECT COALESCE(SUM(unidades_vendidas), 0) AS unidades,
+                           COALESCE(SUM(ingresos), 0) AS ingresos,
+                           COUNT(*) AS registros
+                    FROM ventas
+                    WHERE categoria = :categoria;
+                """)
+                fila = conn.execute(query, {"categoria": categoria}).mappings().first()
 
-        if categoria != "todas":
-            filas = [f for f in filas if f["categoria"] == categoria]
-
-        if not filas:
+        if fila["registros"] == 0:
             return {
                 "categoria": categoria,
                 "unidades_totales": 0,
@@ -86,26 +85,20 @@ def consultar_ventas(categoria: str) -> dict:
                 "advertencia": "No se encontraron datos para esa categoría.",
             }
 
-        unidades_totales = sum(int(f["unidades_vendidas"]) for f in filas)
-        ingresos_totales = sum(int(f["ingresos"]) for f in filas)
-
+        # Convertimos explícitamente a int -- PostgreSQL puede devolver
+        # SUM() de una columna BIGINT como tipo Decimal, que no es
+        # compatible con JSON al mandarlo de vuelta a Gemini.
         return {
             "categoria": categoria,
-            "unidades_totales": unidades_totales,
-            "ingresos_totales": ingresos_totales,
-            "registros_encontrados": len(filas),
+            "unidades_totales": int(fila["unidades"]),
+            "ingresos_totales": int(fila["ingresos"]),
+            "registros_encontrados": int(fila["registros"]),
         }
 
-    except (FileNotFoundError, KeyError, ValueError) as e:
-        return {
-            "categoria": categoria,
-            "error": f"No se pudo consultar los datos: {e}",
-        }
+    except Exception as e:
+        return {"categoria": categoria, "error": f"No se pudo consultar los datos: {e}"}
 
 
-# ---------------------------------------------------------------------------
-# 3. Prueba manual rápida
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     print("Ventas de Montaña:", consultar_ventas("Montaña"))
     print("Ventas totales:", consultar_ventas("todas"))

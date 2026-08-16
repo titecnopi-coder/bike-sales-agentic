@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import logoCityBike from './assets/logo.jpg'
+import Dashboard from './Dashboard.jsx'
 import './App.css'
 
 // URL de la API en Cloud Run, ya desplegada. Si algún día corres esto
@@ -81,6 +82,7 @@ function BurbujaMensaje({ mensaje }) {
 }
 
 export default function App() {
+  const [vista, setVista] = useState('chat')
   const [mensajes, setMensajes] = useState([
     {
       autor: 'sistema',
@@ -140,8 +142,19 @@ export default function App() {
           <h1>CITY BIKE</h1>
           <p>Asistente de analítica &mdash; Bicicletas · Taller · Accesorios</p>
         </div>
+        <button
+          className="boton-alternar-vista"
+          onClick={() => setVista(vista === 'chat' ? 'dashboard' : 'chat')}
+        >
+          {vista === 'chat' ? 'Ver dashboard' : 'Volver al chat'}
+        </button>
       </header>
 
+      {vista === 'dashboard' ? (
+        <main className="chat-ventana">
+          <Dashboard />
+        </main>
+      ) : (
       <main className="chat-ventana">
         {mensajes.map((m, i) => (
           <BurbujaMensaje key={i} mensaje={m} />
@@ -156,7 +169,9 @@ export default function App() {
         {error && <div className="aviso-error">{error}</div>}
         <div ref={finalRef} />
       </main>
+      )}
 
+      {vista === 'chat' && (
       <form className="barra-entrada" onSubmit={enviarPregunta}>
         <input
           type="text"
@@ -169,6 +184,7 @@ export default function App() {
           Enviar
         </button>
       </form>
+      )}
     </div>
   )
 }

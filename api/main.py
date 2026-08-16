@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from orchestrator.main import procesar_pregunta
+from observability.kpis import calcular_kpis
 
 app = FastAPI(
     title="Bike Sales Agentic API",
@@ -61,6 +62,18 @@ class PreguntaResponse(BaseModel):
 def raiz():
     """Endpoint simple para confirmar que la API está viva."""
     return {"mensaje": "Bike Sales Agentic API funcionando. Ve a /docs para probarla."}
+
+
+@app.get("/metricas")
+def metricas():
+    """
+    Calcula y devuelve los 8 KPIs del dashboard de observabilidad,
+    a partir de todos los registros históricos en la tabla 'logs'.
+    """
+    try:
+        return calcular_kpis()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error calculando métricas: {e}")
 
 
 @app.post("/preguntar", response_model=PreguntaResponse)

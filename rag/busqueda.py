@@ -69,8 +69,7 @@ def buscar_chunks_relevantes(pregunta: str, k: int = 3) -> list[dict]:
         )
         filas = resultado.fetchall()
 
-    connector.close()
-
+    # NOTA: no cerramos 'connector' -- ver comentario en observability/logger.py.
     return [
         {"texto": fila.texto, "fuente": fila.fuente, "score": round(fila.score, 4)}
         for fila in filas

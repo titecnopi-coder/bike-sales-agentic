@@ -1,0 +1,11 @@
+frontend/
+node_modules/
+__pycache__/
+*.pyc
+rag/corpus/
+rag/vector_store_local.json
+.git/
+.gitignore
+README.md
+docs/
+tests/

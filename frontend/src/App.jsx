@@ -2,7 +2,10 @@ import { useState, useRef, useEffect } from 'react'
 import logoCityBike from './assets/logo.jpg'
 import './App.css'
 
-const API_URL = 'http://localhost:8000'
+// URL de la API en Cloud Run, ya desplegada. Si algún día corres esto
+// apuntando a otra API (por ejemplo, un ambiente de pruebas distinto),
+// puedes sobreescribirla con la variable de entorno VITE_API_URL.
+const API_URL = import.meta.env.VITE_API_URL || 'https://bike-sales-api-575202457786.us-central1.run.app'
 
 const PATRONES = [
   { id: 'orchestrator', label: 'Orquestador' },

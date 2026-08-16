@@ -83,10 +83,10 @@ EJECUTORES = {
 }
 
 
-def _generar_respuesta(pregunta: str, feedback_refinamiento: str = "") -> tuple[str, str]:
+def _generar_respuesta(pregunta: str, feedback_refinamiento: str = "") -> tuple[str, str, str | None]:
     """
     Ejecuta el flujo de tool calling (pasos 1-4 del docstring).
-    Devuelve (respuesta_final_texto, contexto_usado_para_el_juez).
+    Devuelve (respuesta_final_texto, contexto_usado_para_el_juez, nombre_tool_usada).
     Si feedback_refinamiento no está vacío, se lo agrega a la pregunta
     para pedirle a Gemini que corrija su intento anterior.
     """
@@ -127,9 +127,9 @@ def _generar_respuesta(pregunta: str, feedback_refinamiento: str = "") -> tuple[
             model=MODEL, contents=contents,
             config=types.GenerateContentConfig(tools=[TOOLS]),
         )
-        return respuesta_final.text, contexto_usado
+        return respuesta_final.text, contexto_usado, nombre_tool
 
-    return parte.text, contexto_usado
+    return parte.text, contexto_usado, None
 
 
 def procesar_pregunta(pregunta: str) -> dict:
@@ -138,7 +138,7 @@ def procesar_pregunta(pregunta: str) -> dict:
     y la información del Juez, para que quede trazabilidad completa
     (útil también para el logging estructurado que exige el enunciado).
     """
-    respuesta, contexto = _generar_respuesta(pregunta)
+    respuesta, contexto, tool_usada = _generar_respuesta(pregunta)
     evaluacion = evaluar_respuesta(pregunta, contexto, respuesta)
 
     intentos = 0
@@ -147,7 +147,7 @@ def procesar_pregunta(pregunta: str) -> dict:
         comentario = evaluacion.get("detalle", {}).get("comentario", "calidad insuficiente")
         print(f"[Juez] Respuesta rechazada (score={evaluacion['score_final']}). Refinando... intento {intentos}")
 
-        respuesta, contexto = _generar_respuesta(pregunta, feedback_refinamiento=comentario)
+        respuesta, contexto, tool_usada = _generar_respuesta(pregunta, feedback_refinamiento=comentario)
         evaluacion = evaluar_respuesta(pregunta, contexto, respuesta)
 
     return {
@@ -155,6 +155,7 @@ def procesar_pregunta(pregunta: str) -> dict:
         "score_juez": evaluacion["score_final"],
         "aprobado": evaluacion["aprobado"],
         "intentos_refinamiento": intentos,
+        "tool_usada": tool_usada,
     }
 
 

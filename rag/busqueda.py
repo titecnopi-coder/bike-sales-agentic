@@ -1,78 +1,80 @@
 """
-RAG — Búsqueda semántica (retrieval)
-=======================================
-Dado una pregunta del usuario, encuentra los 'k' chunks más parecidos
-en significado, usando similitud coseno entre embeddings.
-
-Esta es la mitad de RAG que faltaba: ingesta.py guarda los chunks,
-este archivo los busca.
+RAG — Búsqueda semántica (retrieval) -- versión Cloud SQL / pgvector
+========================================================================
+Misma función que la versión anterior (buscar_chunks_relevantes), pero
+ahora consulta la base de datos real en la nube en vez del archivo
+JSON local. pgvector calcula la similitud directamente en SQL con el
+operador '<=>' (distancia coseno), así que ya no necesitamos calcular
+la similitud a mano en Python.
 """
 
-import json
 import os
-from pathlib import Path
 
 from google import genai
+from google.cloud.sql.connector import Connector
+import sqlalchemy
 
 PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "my-first-project-123456-505714")
 LOCATION = "us-central1"
 MODELO_EMBEDDINGS = "text-embedding-004"
 
-ARCHIVO_VECTOR_STORE = Path(__file__).parent / "vector_store_local.json"
+REGION = "us-central1"
+INSTANCIA = "bike-sales-db"
+BASE_DE_DATOS = "bike_sales"
+USUARIO = "postgres"
+CONTRASENA = os.environ.get("DB_PASSWORD")
 
 client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
+connector = Connector()
+
+
+def _conectar():
+    conexion_string = f"{PROJECT_ID}:{REGION}:{INSTANCIA}"
+    return connector.connect(
+        conexion_string, "pg8000",
+        user=USUARIO, password=CONTRASENA, db=BASE_DE_DATOS,
+    )
 
 
 def _generar_embedding(texto: str) -> list[float]:
-    """Igual que en ingesta.py: convierte texto en su vector de embedding."""
-    respuesta = client.models.embed_content(
-        model=MODELO_EMBEDDINGS,
-        contents=texto,
-    )
+    respuesta = client.models.embed_content(model=MODELO_EMBEDDINGS, contents=texto)
     return respuesta.embeddings[0].values
-
-
-def _similitud_coseno(vector_a: list[float], vector_b: list[float]) -> float:
-    """
-    Calcula qué tan parecidos son dos vectores (entre -1 y 1).
-    Cuanto más cerca de 1, más parecidos en significado.
-    No usamos ninguna librería externa aquí a propósito, para que
-    veas la fórmula matemática real detrás del concepto.
-    """
-    producto_punto = sum(a * b for a, b in zip(vector_a, vector_b))
-    magnitud_a = sum(a * a for a in vector_a) ** 0.5
-    magnitud_b = sum(b * b for b in vector_b) ** 0.5
-    if magnitud_a == 0 or magnitud_b == 0:
-        return 0.0
-    return producto_punto / (magnitud_a * magnitud_b)
-
-
-def _cargar_chunks() -> list[dict]:
-    with open(ARCHIVO_VECTOR_STORE, encoding="utf-8") as f:
-        return json.load(f)
 
 
 def buscar_chunks_relevantes(pregunta: str, k: int = 3) -> list[dict]:
     """
-    Punto de entrada. Devuelve los 'k' chunks más relevantes para la
-    pregunta, ordenados de más a menos relevante. Cada resultado
-    incluye su score de similitud (útil también para el KPI de
-    'Cobertura del Corpus RAG' que exige el dashboard).
+    Igual firma y comportamiento que antes (para no romper nada de lo
+    que ya usa esta función, como rag/reranking.py), pero ahora
+    consulta pgvector en Cloud SQL en vez del JSON local.
+
+    El operador '<=>' de pgvector calcula distancia coseno (0 = idénticos).
+    Como queremos SIMILITUD (más alto = más parecido, igual que antes),
+    convertimos: similitud = 1 - distancia.
     """
-    chunks = _cargar_chunks()
+    if not CONTRASENA:
+        raise RuntimeError("Falta DB_PASSWORD. Corre: set DB_PASSWORD=tu_contrasena")
+
     embedding_pregunta = _generar_embedding(pregunta)
 
-    resultados = []
-    for chunk in chunks:
-        score = _similitud_coseno(embedding_pregunta, chunk["embedding"])
-        resultados.append({
-            "texto": chunk["texto"],
-            "fuente": chunk["fuente"],
-            "score": round(score, 4),
-        })
+    engine = sqlalchemy.create_engine("postgresql+pg8000://", creator=_conectar)
+    with engine.connect() as conn:
+        resultado = conn.execute(
+            sqlalchemy.text("""
+                SELECT texto, fuente, 1 - (embedding <=> :query_vector) AS score
+                FROM chunks
+                ORDER BY embedding <=> :query_vector
+                LIMIT :k;
+            """),
+            {"query_vector": str(embedding_pregunta), "k": k},
+        )
+        filas = resultado.fetchall()
 
-    resultados.sort(key=lambda r: r["score"], reverse=True)
-    return resultados[:k]
+    connector.close()
+
+    return [
+        {"texto": fila.texto, "fuente": fila.fuente, "score": round(fila.score, 4)}
+        for fila in filas
+    ]
 
 
 if __name__ == "__main__":

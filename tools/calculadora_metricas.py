@@ -85,8 +85,12 @@ def calcular_metrica(
         if metrica == "margen_bruto":
             ingresos = valores["ingresos"]
             costos = valores["costos"]
-            if ingresos == 0:
-                raise MetricaInvalidaError("ingresos no puede ser 0")
+            if ingresos <= 0:
+                raise MetricaInvalidaError(
+                    "Los ingresos deben ser un valor positivo mayor que cero "
+                    "(no tiene sentido de negocio calcular margen con ingresos "
+                    "negativos o en cero)."
+                )
             resultado = round((ingresos - costos) / ingresos * 100, 2)
             return {
                 "resultado": resultado,

@@ -87,3 +87,4 @@ Cada `git push` a `main` dispara automáticamente: lint (`ruff`) → tests (`pyt
 ## 👤 Autora
 
 Angie Stefany Vera Medina — Ingeniera de Sistemas, especialización en Data, AI & Automation.
+<!-- Prueba  -->

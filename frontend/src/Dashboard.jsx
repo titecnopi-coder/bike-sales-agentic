@@ -34,16 +34,30 @@ export default function Dashboard() {
   const [kpis, setKpis] = useState(null)
   const [error, setError] = useState(null)
   const [cargando, setCargando] = useState(true)
+  const [ultimaActualizacion, setUltimaActualizacion] = useState(null)
 
-  useEffect(() => {
+  const cargarMetricas = () => {
     fetch(`${API_URL}/metricas`)
       .then((r) => {
         if (!r.ok) throw new Error(`Error ${r.status}`)
         return r.json()
       })
-      .then(setKpis)
+      .then((data) => {
+        setKpis(data)
+        setError(null)
+        setUltimaActualizacion(new Date())
+      })
       .catch((e) => setError(e.message))
       .finally(() => setCargando(false))
+  }
+
+  useEffect(() => {
+    cargarMetricas()
+    // El enunciado exige que el dashboard se actualice cada 60s como máximo.
+    // setInterval vuelve a pedir las métricas automáticamente sin que el
+    // usuario tenga que recargar la página.
+    const intervalo = setInterval(cargarMetricas, 60_000)
+    return () => clearInterval(intervalo)
   }, [])
 
   if (cargando) return <div className="dashboard-mensaje">Cargando métricas...</div>
@@ -54,6 +68,9 @@ export default function Dashboard() {
     <div className="dashboard">
       <p className="dashboard-subtitulo">
         Basado en {kpis.total_consultas_registradas} consulta(s) registrada(s)
+        {ultimaActualizacion && (
+          <> · Actualizado: {ultimaActualizacion.toLocaleTimeString('es-CO')} (auto cada 60s)</>
+        )}
       </p>
       <div className="kpi-grid">
         {Object.entries(ETIQUETAS).map(([clave, etiqueta]) => (

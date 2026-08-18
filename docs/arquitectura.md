@@ -351,3 +351,15 @@ Hallazgo de análisis técnico (no de QA funcional): las 10 llamadas a Gemini qu
 
 Se documenta como extensión futura y no se implementó antes de la entrega por priorizar la estabilidad del sistema ya funcional frente al riesgo de modificar código en producción cerca del plazo límite.
 
+
+### 11.3 Hallazgo de calibración: umbral de cobertura del corpus RAG
+
+Hallazgo de análisis técnico: el KPI #7 (Cobertura del corpus RAG) usa como umbral de referencia una similitud coseno >= 0.75, valor sugerido a modo de ejemplo en el enunciado de la prueba. En pruebas reales con el modelo de embeddings `text-embedding-004`, las similitudes de los chunks recuperados —incluso los genuinamente relevantes— se ubicaron consistentemente por debajo de ese valor (rango observado aproximado: 0.5-0.7), resultando en una cobertura reportada de 0% pese a que el sistema sí recupera y utiliza contexto relevante, evidenciado por un Score del Juez promedio de 8.9-9.0/10 en las mismas consultas.
+
+**Conclusión:** el umbral de 0.75 es específico del modelo de embeddings y del dominio de aplicación, no un valor universal. Se documenta esta discrepancia como hallazgo de calibración; una recalibración con datos reales de producción sería el siguiente paso natural, no aplicada dentro del alcance de esta prueba para no introducir cambios de última hora sin tiempo suficiente de validación.
+
+### 11.4 Alcance del cálculo de costo y tokens
+
+Hallazgo de análisis técnico: los KPIs #4 (Costo por consulta) y #8 (Tokens promedio) contabilizan únicamente las llamadas a Gemini realizadas directamente por el Orquestador (decisión de tool calling + generación de respuesta final). No incluyen las llamadas del paso de Reranking (hasta 10 por consulta que usa RAG) ni la llamada del Agente Juez.
+
+**Impacto estimado:** incluso sumando estas llamadas faltantes, el costo total por consulta se mantiene muy por debajo del umbral de $0.05 (estimación: <$0.002 por consulta), por lo que no cambia la conclusión del KPI — sí implica que el valor reportado actualmente es una cota inferior del costo real, no el total exacto del pipeline completo.

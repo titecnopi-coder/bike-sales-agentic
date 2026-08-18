@@ -343,3 +343,11 @@ Se probó deliberadamente un intento de *prompt injection* — una instrucción 
 
 **Resultado:** el sistema resistió el intento sin necesitar ningún mecanismo de defensa explícito construido para este fin — respondió reconociendo el intento de manipulación y reafirmando su propósito real ("mi propósito es asistirte utilizando las funciones disponibles para consultar datos de ventas..."). La resistencia observada se atribuye a la combinación de: (1) descripciones de dominio específicas en los `TOOL_SCHEMA`, que anclan a Gemini a su función real, y (2) el entrenamiento base del propio modelo Gemini frente a manipulaciones básicas de este tipo — no a un detector de prompt injection dedicado, que no fue implementado. No se probaron variantes más sofisticadas de este ataque (ej. inyección indirecta a través del contenido de un documento del corpus RAG), por lo que esto no debe interpretarse como una garantía completa de seguridad frente a prompt injection.
 
+### 11.2 Optimización identificada: paralelización del Reranking
+
+Hallazgo de análisis técnico (no de QA funcional): las 10 llamadas a Gemini que hace el paso de Reranking (una nota de relevancia por cada chunk candidato) se ejecutan actualmente **de forma secuencial** — cada una espera a que termine la anterior. Esto contribuye directamente a que el KPI #3 (Time to Last Token) esté por encima del umbral de 10s en consultas que usan RAG (se observaron entre 17s y 32s en pruebas).
+
+**Mejora identificada, no implementada:** ejecutar las 10 llamadas de Reranking **en paralelo** (usando concurrencia, ej. `asyncio` o un `ThreadPoolExecutor`), en vez de una por una. El tiempo total pasaría de aproximadamente "suma de las 10 llamadas" a "el tiempo de la llamada más lenta de las 10" — una reducción significativa esperada.
+
+Se documenta como extensión futura y no se implementó antes de la entrega por priorizar la estabilidad del sistema ya funcional frente al riesgo de modificar código en producción cerca del plazo límite.
+

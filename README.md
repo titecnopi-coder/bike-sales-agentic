@@ -14,7 +14,7 @@ Asistente conversacional de analítica de ventas para **City Bike** (tienda real
 - [Documento de Arquitectura](docs/arquitectura.md) — componentes, agentes, flujo de datos, selección de LLM, chunking, schemas, despliegue, costos y decisiones de diseño
 - [Documento de Administrador](docs/administrador.md) — despliegue, permisos IAM, gestión de secretos, rollback
 - [Guía de Usuario](docs/guia_usuario.md) — cómo usar el sistema, con capturas de pantalla reales
-- [Video demostrativo](#) *(pendiente de enlace)*
+- [Video demostrativo](https://youtu.be/qhi10ISQfus)
 
 ## 🏗️ Los 5 patrones agénticos implementados
 
@@ -87,4 +87,3 @@ Cada `git push` a `main` dispara automáticamente: lint (`ruff`) → tests (`pyt
 ## 👤 Autora
 
 Angie Stefany Vera Medina — Ingeniera de Sistemas, especialización en Data, AI & Automation.
-<!-- Prueba  -->
